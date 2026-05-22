@@ -11,6 +11,7 @@
  */
 
 import { Options } from '@/model/Options';
+import { createRequire } from 'node:module';
 import {
   aggregateUserDayRecords,
   fetchLatestUserReport,
@@ -19,10 +20,28 @@ import {
 } from '../services/github-copilot-usage-api';
 import { getLatestUserMetrics } from '../storage/user-metrics-storage';
 import { fetchAllTeamMembers } from './seats';
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-import mockUsersOrg28Day from '../../public/mock-data/new-api/organization-users-28-day-report.json';
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-import mockUsersEnt28Day from '../../public/mock-data/new-api/enterprise-users-28-day-report.json';
+
+// Lazy loaders — called only when mock data is actually needed.
+// Using createRequire instead of static imports avoids a hard module-load
+// failure when the mock JSON files are absent (e.g. in the sync-service
+// container where NUXT_PUBLIC_IS_DATA_MOCKED=false and public/ is not copied).
+function _loadMockUsersOrg28Day(): Record<string, unknown> | null {
+  try {
+    const req = createRequire(import.meta.url);
+    return req('../../public/mock-data/new-api/organization-users-28-day-report.json');
+  } catch {
+    return null;
+  }
+}
+
+function _loadMockUsersEnt28Day(): Record<string, unknown> | null {
+  try {
+    const req = createRequire(import.meta.url);
+    return req('../../public/mock-data/new-api/enterprise-users-28-day-report.json');
+  } catch {
+    return null;
+  }
+}
 
 /**
  * If the request is for a team scope, resolve team members and filter
@@ -56,7 +75,11 @@ export default defineEventHandler(async (event) => {
   // ── Mock mode ──────────────────────────────────────────────────────────────
   if (options.isDataMocked) {
     const isOrg = (options.scope || 'organization') === 'organization';
-    const raw = isOrg ? mockUsersOrg28Day : mockUsersEnt28Day;
+    const raw = isOrg ? _loadMockUsersOrg28Day() : _loadMockUsersEnt28Day();
+    if (!raw) {
+      logger.error('Mock data files not available');
+      return [];
+    }
     // Org mock uses UserDayRecord[] in day_totals → aggregate on the fly.
     // Enterprise mock uses pre-aggregated UserTotals[] in user_totals → return directly.
     const dayRecords = (raw as { day_totals?: UserDayRecord[] }).day_totals;

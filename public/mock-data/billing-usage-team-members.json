@@ -1,0 +1,27 @@
+{
+  "organizationTeam": {
+    "scope": "organization",
+    "teamSlug": "platform-engineering",
+    "members": [
+      { "id": 101, "login": "octocat", "avatar_url": "https://avatars.githubusercontent.com/u/101" },
+      { "id": 102, "login": "hubber", "avatar_url": "https://avatars.githubusercontent.com/u/102" }
+    ]
+  },
+  "enterpriseTeam": {
+    "scope": "enterprise",
+    "teamSlug": "enterprise-architects",
+    "memberships": [
+      { "user": { "id": 201, "login": "enterprise-admin", "avatar_url": "https://avatars.githubusercontent.com/u/201" }, "role": "member" },
+      { "user": { "id": 203, "login": "data-engineer", "avatar_url": "https://avatars.githubusercontent.com/u/203" }, "role": "member" }
+    ]
+  },
+  "enterpriseOrganizationOverrideTeam": {
+    "scope": "enterprise",
+    "organization": "platform-org",
+    "teamSlug": "platform-engineering",
+    "members": [
+      { "id": 201, "login": "enterprise-admin", "avatar_url": "https://avatars.githubusercontent.com/u/201" },
+      { "id": 203, "login": "data-engineer", "avatar_url": "https://avatars.githubusercontent.com/u/203" }
+    ]
+  }
+}

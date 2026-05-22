@@ -39,11 +39,26 @@ export interface RouteQuery {
     since?: string;
     until?: string;
     mock?: string;
+    githubOrg?: string;
+    githubEnt?: string;
+    githubTeam?: string;
+    scope?: string;
 }
 
 export interface RouteInfo {
     params: RouteParams;
     query: RouteQuery;
+}
+
+export function normalizeGitHubTeamSlug(value?: string | null): string | undefined {
+    const slug = typeof value === 'string' ? value.trim() : '';
+    if (!slug || slug === '__all__' || slug.toLowerCase() === 'all teams') return undefined;
+    return slug;
+}
+
+function readRouteQueryString(value: unknown): string | undefined {
+    const raw = Array.isArray(value) ? value[0] : value;
+    return typeof raw === 'string' && raw.trim() ? raw.trim() : undefined;
 }
 
 export class Options {
@@ -63,7 +78,7 @@ export class Options {
         this.isDataMocked = data.isDataMocked;
         this.githubOrg = data.githubOrg;
         this.githubEnt = data.githubEnt;
-        this.githubTeam = data.githubTeam;
+        this.githubTeam = normalizeGitHubTeamSlug(data.githubTeam);
         this.scope = data.scope;
         this.excludeHolidays = data.excludeHolidays;
         this.locale = data.locale;
@@ -89,11 +104,12 @@ export class Options {
         if (route.params.org) {
             options.githubOrg = route.params.org as string;
             options.scope = 'organization';
-            if (route.params.team) options.githubTeam = route.params.team as string;
+            if (config.public.githubEnt) options.githubEnt = config.public.githubEnt;
+            if (route.params.team) options.githubTeam = normalizeGitHubTeamSlug(route.params.team as string);
         } else if (route.params.ent) {
             options.githubEnt = route.params.ent as string;
             options.scope = 'enterprise';
-            if (route.params.team) options.githubTeam = route.params.team as string;
+            if (route.params.team) options.githubTeam = normalizeGitHubTeamSlug(route.params.team as string);
         } else {
             // Use defaults from runtime config
             // Normalize legacy 'team-organization'/'team-enterprise' values to base scope
@@ -109,8 +125,17 @@ export class Options {
             }
             if (config.public.githubOrg) options.githubOrg = config.public.githubOrg;
             if (config.public.githubEnt) options.githubEnt = config.public.githubEnt;
-            if (config.public.githubTeam) options.githubTeam = config.public.githubTeam;
+            if (config.public.githubTeam) options.githubTeam = normalizeGitHubTeamSlug(config.public.githubTeam);
         }
+
+        const queryScope = readRouteQueryString(route.query.scope);
+        if (queryScope === 'organization' || queryScope === 'enterprise') options.scope = queryScope;
+        const queryOrg = readRouteQueryString(route.query.githubOrg);
+        const queryEnt = readRouteQueryString(route.query.githubEnt);
+        const queryTeam = normalizeGitHubTeamSlug(readRouteQueryString(route.query.githubTeam));
+        if (queryOrg) options.githubOrg = queryOrg;
+        if (queryEnt) options.githubEnt = queryEnt;
+        if (queryTeam) options.githubTeam = queryTeam;
 
         return options;
     }
@@ -135,7 +160,9 @@ export class Options {
         });
 
         // Only set boolean properties if they're explicitly provided
-        if (params.has('isDataMocked')) {
+        if (params.has('mock')) {
+            options.isDataMocked = true;
+        } else if (params.has('isDataMocked')) {
             options.isDataMocked = params.get('isDataMocked') === 'true';
         }
 
@@ -162,7 +189,9 @@ export class Options {
         });
 
         // Only set boolean properties if they're explicitly provided
-        if (query.isDataMocked !== undefined) {
+        if (query.mock !== undefined) {
+            options.isDataMocked = true;
+        } else if (query.isDataMocked !== undefined) {
             options.isDataMocked = query.isDataMocked === 'true';
         }
 

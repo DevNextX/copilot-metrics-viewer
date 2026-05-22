@@ -152,6 +152,17 @@ describe('Options', () => {
       expect(options.isDataMocked).toBe(true)
     })
 
+    test('carries enterprise context from query parameters for organization routes', () => {
+      const mockRoute = createMockRoute({ org: 'test-org' }, { githubEnt: 'test-enterprise', githubTeam: 'All teams' })
+
+      const options = Options.fromRoute(mockRoute)
+
+      expect(options.githubOrg).toBe('test-org')
+      expect(options.githubEnt).toBe('test-enterprise')
+      expect(options.githubTeam).toBeUndefined()
+      expect(options.scope).toBe('organization')
+    })
+
     test('uses runtime config defaults when no route params', () => {
       const mockRoute = createMockRoute()
       
@@ -221,6 +232,15 @@ describe('Options', () => {
       
       expect(options.isDataMocked).toBe(false)
     })
+
+    test('handles mock search parameter as mocked data', () => {
+      const params = new URLSearchParams()
+      params.set('mock', 'true')
+
+      const options = Options.fromURLSearchParams(params)
+
+      expect(options.isDataMocked).toBe(true)
+    })
   })
 
   describe('fromQuery', () => {
@@ -260,6 +280,17 @@ describe('Options', () => {
       expect(options.isDataMocked).toBe(true)
       expect(options.githubOrg).toBe('test-org')
       expect(options.scope).toBe('organization')
+    })
+
+    test('handles mock query parameter as mocked data', () => {
+      const options = Options.fromQuery({ mock: 'true' })
+
+      expect(options.isDataMocked).toBe(true)
+    })
+
+    test('normalizes all-teams UI values to no team filter', () => {
+      expect(Options.fromQuery({ githubTeam: 'All teams' }).githubTeam).toBeUndefined()
+      expect(Options.fromQuery({ githubTeam: '__all__' }).githubTeam).toBeUndefined()
     })
 
     test('handles empty query object', () => {

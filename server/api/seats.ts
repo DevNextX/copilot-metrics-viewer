@@ -3,6 +3,10 @@ import { readFileSync } from 'fs';
 import { Options } from '@/model/Options';
 import { resolve } from 'path';
 import { getLatestSeats } from '../storage/seats-storage';
+import { fetchAllTeamMembers } from '../utils/team-members';
+import type { TeamMember } from '../utils/team-members';
+export { fetchAllTeamMembers, normalizeTeamMember, normalizeTeamMembers } from '../utils/team-members';
+export type { TeamMember } from '../utils/team-members';
 
 /** UI page size cap — GitHub API max is 100, so 300 = 3 GitHub calls per page. */
 const UI_MAX_PER_PAGE = 300;
@@ -19,85 +23,6 @@ export interface SeatsApiResponse {
   page: number;
   per_page: number;
   total_pages: number;
-}
-
-// Minimal shape of a GitHub team member object we care about
-export interface TeamMember {
-  login: string;
-  id: number;
-  [key: string]: unknown; // allow additional fields without using any
-}
-
-/**
- * Fetch all members of a team handling GitHub API pagination.
- * Supports both organization teams (via /members) and enterprise teams
- * (via /memberships with X-GitHub-Api-Version: 2026-03-10).
- *
- * @param options Options containing scope/org/team information
- * @param headers Headers (with Authorization) forwarded from the incoming request
- * @returns Array of team member objects returned by the GitHub API
- */
-export async function fetchAllTeamMembers(options: Options, headers: HeadersInit): Promise<TeamMember[]> {
-  if (!options.githubTeam) {
-    return [];
-  }
-
-  const membersUrl = options.getTeamMembersApiUrl();
-  const perPage = 100;
-  let page = 1;
-  const members: TeamMember[] = [];
-
-  // Build headers: add API version for enterprise team memberships
-  // (not needed when using org-based teams API, e.g. Full GHEC org teams)
-  const fetchHeaders: Record<string, string> = {};
-  if (headers instanceof Headers) {
-    for (const [key, value] of headers.entries()) {
-      fetchHeaders[key] = value;
-    }
-  } else if (typeof headers === 'object') {
-    Object.assign(fetchHeaders, headers);
-  }
-  if (options.scope === 'enterprise' && !options.githubOrg) {
-    delete fetchHeaders['x-github-api-version'];
-    fetchHeaders['X-GitHub-Api-Version'] = '2026-03-10';
-  }
-
-  while (true) {
-    const pageData = await $fetch<TeamMember[]>(membersUrl, {
-      headers: fetchHeaders,
-      params: { per_page: perPage, page }
-    });
-
-    if (!Array.isArray(pageData) || pageData.length === 0) break;
-    // Normalize: enterprise /memberships may nest user data under a `user` property
-    for (const item of pageData) {
-      const member = normalizeTeamMember(item);
-      if (member) members.push(member);
-    }
-    if (pageData.length < perPage) break; // last page
-    page += 1;
-  }
-
-  return members;
-}
-
-/**
- * Normalize a team member response item into {login, id}.
- * Handles both flat user objects and potentially nested membership objects.
- */
-function normalizeTeamMember(item: Record<string, unknown>): TeamMember | null {
-  // Flat user object (standard shape from both /members and /memberships)
-  if (typeof item.login === 'string' && typeof item.id === 'number') {
-    return item as TeamMember;
-  }
-  // Nested membership object (defensive: { user: { login, id } })
-  if (item.user && typeof item.user === 'object') {
-    const user = item.user as Record<string, unknown>;
-    if (typeof user.login === 'string' && typeof user.id === 'number') {
-      return user as TeamMember;
-    }
-  }
-  return null;
 }
 
 /**

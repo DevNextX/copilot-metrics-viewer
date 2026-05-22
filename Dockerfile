@@ -12,7 +12,15 @@ USER node
 WORKDIR /app
 
 COPY --chown=1000:1000 package*.json ./
-RUN npm ci
+# Use BuildKit cache mount to persist npm cache across builds,
+# and increase fetch-timeout / reduce concurrency to avoid ETIMEDOUT
+# in Docker overlay networks with limited bandwidth.
+RUN --mount=type=cache,target=/home/node/.npm,uid=1000,gid=1000 \
+    npm config set fetch-timeout 600000 && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    npm config set maxsockets 4 && \
+    npm ci
 COPY --chown=1000:1000 . .
 RUN npm run build
 

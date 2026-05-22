@@ -24,7 +24,7 @@ import {
   sortReportDayTotalsByDay,
   transformReportToMetrics,
 } from '../../server/services/report-transformer';
-import { isMockMode } from '../../server/services/github-copilot-usage-api-mock';
+import { generateMockReport, isMockMode } from '../../server/services/github-copilot-usage-api-mock';
 import { aggregateTeamMetrics } from '../../server/services/user-metrics-aggregator';
 import { fetchAllTeamMembers } from '../../server/api/seats';
 
@@ -120,17 +120,17 @@ export async function getMetricsDataV2(event: H3Event<EventHandlerRequest>): Pro
 
   // 1. Mock mode — return immediately, no DB, no API
   //    Controlled by NUXT_PUBLIC_IS_DATA_MOCKED env var, not per-request params
-  if (isMockMode()) {
+  if (options.isDataMocked || isMockMode()) {
     if (isLegacyMode()) {
       logger.info('Using mocked data mode (legacy format — USE_LEGACY_API=true)');
       const metrics = await getLegacyMetricsData(event);
       return sortMetricsDataResult({ metrics, reportData: [] });
     }
-    // Default: exercise full new-API mock pipeline
-    logger.info('Using mocked data mode (new API format via HTTP download)');
-    const identifier = options.githubOrg || options.githubEnt || 'mock-org';
-    const scope = (options.scope || 'organization') as MetricsReportRequest['scope'];
-    const report = await fetchLatestReport({ scope, identifier }, new Headers());
+    // Default: exercise new-API-shaped mock data without touching GitHub.
+    logger.info('Using mocked data mode (new API format)');
+    const endDay = options.until || new Date().toISOString().split('T')[0];
+    const startDay = options.since || new Date(new Date(endDay).getTime() - 27 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const report = generateMockReport(startDay, endDay);
     const metrics = transformReportToMetrics(report);
     return sortMetricsDataResult({ metrics, reportData: report.day_totals });
   }

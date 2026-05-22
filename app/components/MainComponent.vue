@@ -120,7 +120,7 @@
 
     <!-- API Error Message -->
     <v-alert
-      v-if="apiError && !signInRequired"
+      v-if="apiError && !signInRequired && tab !== 'premium usage'"
       type="error"
       variant="tonal"
       closable
@@ -152,9 +152,9 @@
     </AuthState>
 
 
-    <div v-show="!apiError">
-      <v-progress-linear v-show="!metricsReady" indeterminate color="indigo" />
-      <v-window v-show="(metricsReady && metrics.length) || (seatsReady && tab === 'seat analysis') || (userMetricsReady && tab === 'user metrics') || (metricsReady && reportData.length > 0 && (tab === 'languages' || tab === 'editors'))" v-model="tab">
+    <div v-show="!apiError || tab === 'premium usage'">
+      <v-progress-linear v-show="!metricsReady && tab !== 'premium usage'" indeterminate color="indigo" />
+      <v-window v-show="(metricsReady && metrics.length) || (seatsReady && tab === 'seat analysis') || (userMetricsReady && tab === 'user metrics') || tab === 'premium usage' || (metricsReady && reportData.length > 0 && (tab === 'languages' || tab === 'editors'))" v-model="tab">
         <v-window-item v-for="item in tabItems" :key="item" :value="item">
           <v-card flat>
             <MetricsViewer v-if="item === getDisplayTabName(itemName)" :metrics="metrics" :report-data="reportData" :date-range-description="dateRangeDescription" />
@@ -190,13 +190,19 @@ v-if="item === 'copilot chat'" :metrics="metrics"
               :user-metrics-history="userMetricsHistory"
               :query-params="seatsQueryParams"
             />
+            <PremiumUsageViewer
+              v-if="item === 'premium usage'"
+              :date-range-description="dateRangeDescription"
+              :date-range="dateRange"
+              :query-params="aiQueryParams"
+            />
             <ApiResponse
 v-if="item === 'api response'" :metrics="metrics" :original-metrics="originalMetrics"
               :seats="seats" />
           </v-card>
         </v-window-item>
         <v-alert
-          v-show="(metricsReady && metrics.length == 0 && tab !== 'seat analysis' && tab !== 'user metrics') || (seatsReady && seats.length == 0 && tab === 'seat analysis') || (userMetricsReady && userMetrics.length == 0 && tab === 'user metrics')"
+          v-show="(metricsReady && metrics.length == 0 && tab !== 'seat analysis' && tab !== 'user metrics' && tab !== 'premium usage') || (seatsReady && seats.length == 0 && tab === 'seat analysis') || (userMetricsReady && userMetrics.length == 0 && tab === 'user metrics')"
           density="compact" text="No data available to display" title="No data" type="warning" />
       </v-window>
 
@@ -240,6 +246,7 @@ import PullRequestViewer from './PullRequestViewer.vue'
 import DateRangeSelector from './DateRangeSelector.vue'
 import UserMetricsViewer from './UserMetricsViewer.vue'
 import AiChatPanel from './AiChatPanel.vue'
+import PremiumUsageViewer from './PremiumUsageViewer.vue'
 import { Options } from '@/model/Options';
 import { useRoute } from 'vue-router';
 import { applyHiddenTabs, applyHistoricalModeFilter } from '@/utils/tabUtils';
@@ -258,7 +265,8 @@ export default defineNuxtComponent({
     PullRequestViewer,
     DateRangeSelector,
     UserMetricsViewer,
-    AiChatPanel
+    AiChatPanel,
+    PremiumUsageViewer
   },
   methods: {
     logout() {
@@ -392,7 +400,7 @@ export default defineNuxtComponent({
 
   data() {
     return {
-      tabItems: ['languages', 'editors', 'copilot chat', 'agent activity', 'pull requests', 'models', 'seat analysis', 'user metrics', 'api response'],
+      tabItems: ['languages', 'editors', 'copilot chat', 'agent activity', 'pull requests', 'models', 'seat analysis', 'user metrics', 'premium usage', 'api response'],
       tab: null,
       dateRangeDescription: 'Over the last 28 days',
       isLoading: false,
@@ -434,6 +442,11 @@ export default defineNuxtComponent({
 
     // Filter out hidden tabs based on NUXT_PUBLIC_HIDDEN_TABS environment variable
     this.tabItems = applyHiddenTabs(this.tabItems, this.config.public.hiddenTabs as string);
+
+    const requestedTab = typeof this.route.query.tab === 'string' ? this.route.query.tab.toLowerCase() : undefined;
+    if (requestedTab && this.tabItems.some(item => item.toLowerCase() === requestedTab)) {
+      this.tab = this.tabItems.find(item => item.toLowerCase() === requestedTab) as string;
+    }
   },
   async mounted() {
     // Load initial data
@@ -559,7 +572,9 @@ export default defineNuxtComponent({
 
     const aiQueryParams = computed(() => {
       const options = Options.fromRoute(route.value, dateRange.value.since, dateRange.value.until);
-      return options.toParams();
+      const params = options.toParams();
+      if (typeof route.value.query.user === 'string') params.user = route.value.query.user;
+      return params;
     });
 
     return {

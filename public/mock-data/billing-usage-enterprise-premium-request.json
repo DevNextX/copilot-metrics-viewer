@@ -1,0 +1,54 @@
+{
+  "usage": [
+    {
+      "date": "2026-04-03",
+      "product": "copilot",
+      "sku": "copilot_enterprise",
+      "model": "gpt-4.1",
+      "user": { "id": 201, "login": "enterprise-admin", "avatar_url": "https://avatars.githubusercontent.com/u/201" },
+      "organization": { "id": 2001, "login": "platform-org" },
+      "unitType": "requests",
+      "grossQuantity": 84,
+      "discountQuantity": 24,
+      "netQuantity": 60,
+      "grossAmount": 8.4,
+      "discountAmount": 2.4,
+      "netAmount": 6.0
+    },
+    {
+      "date": "2026-04-03",
+      "product": "copilot",
+      "sku": "copilot_business",
+      "model": "claude-opus-4.1",
+      "user": { "id": 202, "login": "security-lead", "avatar_url": "https://avatars.githubusercontent.com/u/202" },
+      "organization": { "id": 2002, "login": "security-org" },
+      "unitType": "requests",
+      "grossQuantity": 66,
+      "discountQuantity": 16,
+      "netQuantity": 50,
+      "grossAmount": 13.2,
+      "discountAmount": 3.2,
+      "netAmount": 10.0
+    },
+    {
+      "date": "2026-04-04",
+      "product": "copilot",
+      "sku": "copilot_enterprise",
+      "model": "gpt-5-mini",
+      "user": { "id": 203, "login": "data-engineer", "avatar_url": "https://avatars.githubusercontent.com/u/203" },
+      "organization": { "id": 2001, "login": "platform-org" },
+      "unitType": "requests",
+      "grossQuantity": 52,
+      "discountQuantity": 12,
+      "netQuantity": 40,
+      "grossAmount": 5.2,
+      "discountAmount": 1.2,
+      "netAmount": 4.0
+    }
+  ],
+  "totalGrossQuantity": 202,
+  "totalDiscountQuantity": 52,
+  "totalNetQuantity": 150,
+  "totalGrossAmount": 26.8,
+  "totalNetAmount": 20.0
+}

@@ -1,0 +1,54 @@
+{
+  "usage": [
+    {
+      "date": "2026-04-03",
+      "product": "copilot",
+      "sku": "copilot_enterprise",
+      "model": "gpt-4.1",
+      "user": { "id": 101, "login": "octocat", "avatar_url": "https://avatars.githubusercontent.com/u/101" },
+      "organization": { "id": 1001, "login": "mocked-org" },
+      "unitType": "requests",
+      "grossQuantity": 58,
+      "discountQuantity": 18,
+      "netQuantity": 40,
+      "grossAmount": 5.8,
+      "discountAmount": 1.8,
+      "netAmount": 4.0
+    },
+    {
+      "date": "2026-04-03",
+      "product": "copilot",
+      "sku": "copilot_enterprise",
+      "model": "claude-sonnet-4.5",
+      "user": { "id": 102, "login": "hubber", "avatar_url": "https://avatars.githubusercontent.com/u/102" },
+      "organization": { "id": 1001, "login": "mocked-org" },
+      "unitType": "requests",
+      "grossQuantity": 41,
+      "discountQuantity": 6,
+      "netQuantity": 35,
+      "grossAmount": 6.15,
+      "discountAmount": 0.9,
+      "netAmount": 5.25
+    },
+    {
+      "date": "2026-04-04",
+      "product": "copilot",
+      "sku": "copilot_enterprise",
+      "model": "gemini-2.0-flash",
+      "user": { "id": 103, "login": "mona", "avatar_url": "https://avatars.githubusercontent.com/u/103" },
+      "organization": { "id": 1001, "login": "mocked-org" },
+      "unitType": "requests",
+      "grossQuantity": 24,
+      "discountQuantity": 4,
+      "netQuantity": 20,
+      "grossAmount": 1.2,
+      "discountAmount": 0.2,
+      "netAmount": 1.0
+    }
+  ],
+  "totalGrossQuantity": 123,
+  "totalDiscountQuantity": 28,
+  "totalNetQuantity": 95,
+  "totalGrossAmount": 13.15,
+  "totalNetAmount": 10.25
+}

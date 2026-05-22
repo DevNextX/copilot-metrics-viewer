@@ -1,0 +1,65 @@
+{
+  "usage": [
+    {
+      "date": "2026-04-03",
+      "product": "copilot",
+      "sku": "copilot_ai_credits",
+      "unitType": "input_tokens",
+      "tokenType": "input",
+      "quantity": 1250000,
+      "amount": 1.25,
+      "model": "gpt-4.1",
+      "user": { "id": 101, "login": "octocat", "avatar_url": "https://avatars.githubusercontent.com/u/101" },
+      "organization": { "id": 1001, "login": "mocked-org" }
+    },
+    {
+      "date": "2026-04-03",
+      "product": "copilot",
+      "sku": "copilot_ai_credits",
+      "unitType": "output_tokens",
+      "tokenType": "output",
+      "quantity": 420000,
+      "amount": 1.68,
+      "model": "gpt-4.1",
+      "user": { "id": 101, "login": "octocat", "avatar_url": "https://avatars.githubusercontent.com/u/101" },
+      "organization": { "id": 1001, "login": "mocked-org" }
+    },
+    {
+      "date": "2026-04-03",
+      "product": "copilot",
+      "sku": "copilot_ai_credits",
+      "unitType": "cached_tokens",
+      "tokenType": "cached_input",
+      "quantity": 310000,
+      "amount": 0.08,
+      "model": "claude-sonnet-4.5",
+      "user": { "id": 102, "login": "hubber", "avatar_url": "https://avatars.githubusercontent.com/u/102" },
+      "organization": { "id": 1001, "login": "mocked-org" }
+    },
+    {
+      "date": "2026-04-03",
+      "product": "copilot",
+      "sku": "copilot_ai_credits",
+      "unitType": "cache_write_tokens",
+      "tokenType": "cache_write",
+      "quantity": 95000,
+      "amount": 0.18,
+      "model": "claude-sonnet-4.5",
+      "user": { "id": 102, "login": "hubber", "avatar_url": "https://avatars.githubusercontent.com/u/102" },
+      "organization": { "id": 1001, "login": "mocked-org" }
+    },
+    {
+      "date": "2026-04-04",
+      "product": "copilot",
+      "sku": "copilot_ai_credits",
+      "unitType": "input_tokens",
+      "tokenType": "input",
+      "quantity": 540000,
+      "amount": 0.27,
+      "model": "gemini-2.0-flash",
+      "user": { "id": 103, "login": "mona", "avatar_url": "https://avatars.githubusercontent.com/u/103" },
+      "organization": { "id": 1001, "login": "mocked-org" }
+    }
+  ],
+  "nextPage": null
+}
