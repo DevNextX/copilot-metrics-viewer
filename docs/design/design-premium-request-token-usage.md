@@ -95,7 +95,7 @@ The backend response should normalize GitHub billing usage data into an applicat
 - `periodEnd`: ISO date
 - `generatedAt`: timestamp when the app generated the normalized report
 - `source`: `github_billing_analytics | github_billing_report | mock | unavailable`
-- `sourceApi`: optional upstream API identifier, for example `premium_request_usage`, `billing_usage`, or `billing_usage_summary`
+- `sourceApi`: optional upstream API identifier, for example `premium_request_usage`, `ai_credit_usage`, `billing_usage`, or `billing_usage_summary`
 - `viewModes`: supported display modes for this response
 - `summary`: `BillingUsageSummary`
 - `users`: `BillingUsageUser[]`
@@ -175,7 +175,16 @@ The backend response should normalize GitHub billing usage data into an applicat
 
 The billing data source should be explicit and adapter-based. The app-owned `GET /api/billing-usage` endpoint should not expose raw GitHub response shapes directly.
 
-**Premium Request source**
+**AI Credit source**
+
+- Enterprise: `GET /enterprises/{enterprise}/settings/billing/ai_credit/usage`
+- Organization: `GET /organizations/{org}/settings/billing/ai_credit/usage`
+- `GET /api/billing-usage` defaults to `viewMode=ai_credit` and `sourceApi=ai_credit_usage`.
+- AI Credit usage is queried at the billing entity. If an organization is billed through a GitHub Enterprise, the backend uses the enterprise `ai_credit/usage` endpoint and reports `billingSourceScope=enterprise`; standalone organizations use the organization endpoint.
+- Current validation confirms aggregate responses can include `sku: Copilot AI Credits` and `unitType: ai-credits`, but they may omit user identifiers. The default AI Credit table therefore enumerates Copilot seat users for the current report boundary, then queries the billing entity with `user={login}` to build user-level rows. Do not combine `organization` and `user` on the enterprise AI Credit endpoint.
+- AI Credit records expose `unitType: ai-credits`, `grossQuantity`, `discountQuantity`, `netQuantity`, `grossAmount`, `discountAmount`, and `netAmount`. The UI maps these to AI credits, included credits, additional credits, gross amount, and additional usage.
+
+**Legacy Premium Request source**
 
 - Enterprise: `GET /enterprises/{enterprise}/settings/billing/premium_request/usage`
 - Organization: `GET /organizations/{org}/settings/billing/premium_request/usage`

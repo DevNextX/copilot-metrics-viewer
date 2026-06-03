@@ -120,7 +120,7 @@
 
     <!-- API Error Message -->
     <v-alert
-      v-if="apiError && !signInRequired && tab !== 'premium usage'"
+      v-if="apiError && !signInRequired && tab !== 'ai usage'"
       type="error"
       variant="tonal"
       closable
@@ -152,9 +152,9 @@
     </AuthState>
 
 
-    <div v-show="!apiError || tab === 'premium usage'">
-      <v-progress-linear v-show="!metricsReady && tab !== 'premium usage'" indeterminate color="indigo" />
-      <v-window v-show="(metricsReady && metrics.length) || (seatsReady && tab === 'seat analysis') || (userMetricsReady && tab === 'user metrics') || tab === 'premium usage' || (metricsReady && reportData.length > 0 && (tab === 'languages' || tab === 'editors'))" v-model="tab">
+    <div v-show="!apiError || tab === 'ai usage'">
+      <v-progress-linear v-show="!metricsReady && tab !== 'ai usage'" indeterminate color="indigo" />
+      <v-window v-show="(metricsReady && metrics.length) || (seatsReady && tab === 'seat analysis') || (userMetricsReady && tab === 'user metrics') || tab === 'ai usage' || (metricsReady && reportData.length > 0 && (tab === 'languages' || tab === 'editors'))" v-model="tab">
         <v-window-item v-for="item in tabItems" :key="item" :value="item">
           <v-card flat>
             <MetricsViewer v-if="item === getDisplayTabName(itemName)" :metrics="metrics" :report-data="reportData" :date-range-description="dateRangeDescription" />
@@ -191,7 +191,7 @@ v-if="item === 'copilot chat'" :metrics="metrics"
               :query-params="seatsQueryParams"
             />
             <PremiumUsageViewer
-              v-if="item === 'premium usage'"
+              v-if="item === 'ai usage'"
               :date-range-description="dateRangeDescription"
               :date-range="dateRange"
               :query-params="aiQueryParams"
@@ -202,7 +202,7 @@ v-if="item === 'api response'" :metrics="metrics" :original-metrics="originalMet
           </v-card>
         </v-window-item>
         <v-alert
-          v-show="(metricsReady && metrics.length == 0 && tab !== 'seat analysis' && tab !== 'user metrics' && tab !== 'premium usage') || (seatsReady && seats.length == 0 && tab === 'seat analysis') || (userMetricsReady && userMetrics.length == 0 && tab === 'user metrics')"
+          v-show="(metricsReady && metrics.length == 0 && tab !== 'seat analysis' && tab !== 'user metrics' && tab !== 'ai usage') || (seatsReady && seats.length == 0 && tab === 'seat analysis') || (userMetricsReady && userMetrics.length == 0 && tab === 'user metrics')"
           density="compact" text="No data available to display" title="No data" type="warning" />
       </v-window>
 
@@ -400,7 +400,7 @@ export default defineNuxtComponent({
 
   data() {
     return {
-      tabItems: ['languages', 'editors', 'copilot chat', 'agent activity', 'pull requests', 'models', 'seat analysis', 'user metrics', 'premium usage', 'api response'],
+      tabItems: ['languages', 'editors', 'copilot chat', 'agent activity', 'pull requests', 'models', 'seat analysis', 'user metrics', 'ai usage', 'api response'],
       tab: null,
       dateRangeDescription: 'Over the last 28 days',
       isLoading: false,

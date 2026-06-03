@@ -3,9 +3,9 @@
     <v-card variant="outlined" class="mx-4 mt-3 mb-3 pa-3" density="compact">
       <div class="d-flex flex-wrap align-start ga-3 text-body-2">
         <div class="mr-3 flex-grow-1 premium-usage-intro">
-          <div class="font-weight-bold text-body-1 mb-1">Premium Usage</div>
+          <div class="font-weight-bold text-body-1 mb-1">AI Usage</div>
           <div class="text-medium-emphasis">
-            Billing-oriented Copilot usage by user and model. Switch between Premium Request and Token Usage views for the selected scope and period.
+            Billing-oriented Copilot AI Credit usage by user and model for the selected scope and period.
           </div>
         </div>
         <v-divider vertical class="mx-2 hidden-sm-and-down" />
@@ -21,7 +21,7 @@
       <v-row class="mb-3" align="center">
         <v-col cols="12" md="3">
           <v-btn-toggle v-model="viewMode" density="comfortable" variant="outlined" mandatory divided>
-            <v-btn value="premium_request" prepend-icon="mdi-counter">Premium Request</v-btn>
+            <v-btn value="ai_credit" prepend-icon="mdi-counter">AI Credits</v-btn>
             <v-btn value="token_usage" prepend-icon="mdi-chart-timeline-variant">Token Usage</v-btn>
           </v-btn-toggle>
         </v-col>
@@ -104,26 +104,26 @@
         <v-card elevation="3" color="surface" variant="elevated">
           <v-card-item>
             <div class="tiles-text">
-              <div class="text-h6 mb-1">Premium Requests</div>
-              <div class="text-caption text-medium-emphasis">Gross request quantity</div>
-              <p class="kpi-value text-indigo mt-1">{{ formatNumber(report?.summary.totalPremiumRequests) }}</p>
+              <div class="text-h6 mb-1">Included Credits</div>
+              <div class="text-caption text-medium-emphasis">Credits covered by plan</div>
+              <p class="kpi-value text-indigo mt-1">{{ formatCredits(report?.summary.totalIncludedCredits ?? report?.summary.totalIncludedRequests) }}</p>
             </div>
           </v-card-item>
         </v-card>
         <v-card elevation="3" color="surface" variant="elevated">
           <v-card-item>
             <div class="tiles-text">
-              <div class="text-h6 mb-1">Total Tokens</div>
-              <div class="text-caption text-medium-emphasis">Input, output, cached, and writes</div>
-              <p class="kpi-value text-teal mt-1">{{ formatNumber(report?.summary.totalTokens) }}</p>
+              <div class="text-h6 mb-1">Additional Credits</div>
+              <div class="text-caption text-medium-emphasis">Credits billed beyond allowance</div>
+              <p class="kpi-value text-teal mt-1">{{ formatCredits(report?.summary.totalAdditionalCredits ?? report?.summary.totalBilledRequests) }}</p>
             </div>
           </v-card-item>
         </v-card>
         <v-card elevation="3" color="surface" variant="elevated">
           <v-card-item>
             <div class="tiles-text">
-              <div class="text-h6 mb-1">Amount</div>
-              <div class="text-caption text-medium-emphasis">Billed or estimated USD</div>
+              <div class="text-h6 mb-1">Additional Usage</div>
+              <div class="text-caption text-medium-emphasis">Net usage amount</div>
               <p class="kpi-value text-success mt-1">{{ formatCurrency(amountValue) }}</p>
             </div>
           </v-card-item>
@@ -165,11 +165,10 @@
                     </div>
                   </div>
                 </td>
-                <td v-if="viewMode === 'premium_request'" class="text-right">{{ formatNumber(item.includedRequests) }}</td>
-                <td v-if="viewMode === 'premium_request'" class="text-right">{{ formatNumber(item.billedRequests) }}</td>
-                <td v-if="viewMode === 'premium_request'" class="text-right font-weight-medium">{{ formatNumber(item.premiumRequests) }}</td>
-                <td v-if="viewMode === 'premium_request'" class="text-right">{{ formatCurrency(item.grossAmountUsd) }}</td>
-                <td v-if="viewMode === 'premium_request'" class="text-right">{{ formatCurrency(item.billedAmountUsd) }}</td>
+                <td v-if="isCreditView" class="text-right">{{ formatCredits(item.includedCredits ?? item.includedRequests) }}</td>
+                <td v-if="isCreditView" class="text-right">{{ formatCredits(item.additionalCredits ?? item.billedRequests) }}</td>
+                <td v-if="isCreditView" class="text-right">{{ formatCurrency(item.grossAmountUsd) }}</td>
+                <td v-if="isCreditView" class="text-right font-weight-medium">{{ formatCurrency(item.additionalUsageUsd ?? item.billedAmountUsd) }}</td>
                 <td v-if="viewMode === 'token_usage'" class="text-right font-weight-medium">{{ formatNumber(item.totalTokens) }}</td>
                 <td v-if="viewMode === 'token_usage'" class="text-right">{{ formatNumber(item.inputTokens) }}</td>
                 <td v-if="viewMode === 'token_usage'" class="text-right">{{ formatNumber(item.outputTokens) }}</td>
@@ -239,7 +238,7 @@ export default defineComponent({
   },
   data() {
     return {
-      viewMode: 'premium_request' as BillingUsageViewMode,
+      viewMode: 'ai_credit' as BillingUsageViewMode,
       selectedTeam: undefined as string | undefined,
       teams: [] as TeamOption[],
       teamsLoading: false,
@@ -275,10 +274,14 @@ export default defineComponent({
           return {
             ...user,
             models: matching,
+            aiCredits: sum((m) => m.aiCredits),
+            includedCredits: sum((m) => m.includedCredits),
+            additionalCredits: sum((m) => m.additionalCredits),
             premiumRequests: sum((m) => m.premiumRequests),
             includedRequests: sum((m) => m.includedRequests),
             billedRequests: sum((m) => m.billedRequests),
             grossAmountUsd: sum((m) => m.grossAmountUsd),
+            additionalUsageUsd: sum((m) => m.additionalUsageUsd),
             billedAmountUsd: sum((m) => m.billedAmountUsd),
             totalTokens: sum((m) => m.totalTokens),
             inputTokens: sum((m) => m.inputTokens),
@@ -299,6 +302,9 @@ export default defineComponent({
         users.reduce((acc, u) => acc + (fn(u) ?? 0), 0);
       return {
         totalUsers: users.length,
+        totalAiCredits: sum((u) => u.aiCredits ?? u.premiumRequests),
+        totalIncludedCredits: sum((u) => u.includedCredits ?? u.includedRequests),
+        totalAdditionalCredits: sum((u) => u.additionalCredits ?? u.billedRequests),
         totalPremiumRequests: sum((u) => u.premiumRequests),
         totalIncludedRequests: sum((u) => u.includedRequests),
         totalBilledRequests: sum((u) => u.billedRequests),
@@ -308,6 +314,7 @@ export default defineComponent({
         totalCachedTokens: sum((u) => u.cachedTokens),
         totalCacheWriteTokens: sum((u) => u.cacheWriteTokens),
         grossAmountUsd: sum((u) => u.grossAmountUsd),
+        additionalUsageUsd: sum((u) => u.additionalUsageUsd ?? u.billedAmountUsd),
         billedAmountUsd: sum((u) => u.billedAmountUsd),
         estimatedCostUsd: sum((u) => u.estimatedCostUsd),
       };
@@ -339,27 +346,29 @@ export default defineComponent({
     },
     amountValue(): number | undefined {
       const summary = this.computedSummary;
-      return summary?.billedAmountUsd ?? summary?.estimatedCostUsd ?? summary?.grossAmountUsd;
+      return summary?.additionalUsageUsd ?? summary?.billedAmountUsd ?? summary?.estimatedCostUsd ?? summary?.grossAmountUsd;
     },
     modelFilterItems(): Array<{ model: string; modelKey: string }> {
       return this.rawReport?.modelOptions ?? [];
     },
     tableTitle(): string {
-      return this.viewMode === 'premium_request' ? 'Premium Request Usage by User' : 'Token Usage by User';
+      return this.viewMode === 'ai_credit' || this.viewMode === 'premium_request' ? 'AI Credit Usage by User' : 'Token Usage by User';
+    },
+    isCreditView(): boolean {
+      return this.viewMode === 'ai_credit' || this.viewMode === 'premium_request';
     },
     activeHeaders(): Header[] {
       const base: Header[] = [
         { title: '', key: 'expand', sortable: false, width: '56px' },
         { title: 'User', key: 'login' },
       ];
-      if (this.viewMode === 'premium_request') {
+      if (this.viewMode === 'ai_credit' || this.viewMode === 'premium_request') {
         return [
           ...base,
-          { title: 'Included', key: 'includedRequests' },
-          { title: 'Billed', key: 'billedRequests' },
-          { title: 'Premium Requests', key: 'premiumRequests' },
+          { title: 'Included Credits', key: 'includedCredits' },
+          { title: 'Additional Credits', key: 'additionalCredits' },
           { title: 'Gross Amount', key: 'grossAmountUsd' },
-          { title: 'Billed Amount', key: 'billedAmountUsd' },
+          { title: 'Additional Usage', key: 'additionalUsageUsd' },
         ];
       }
       return [
@@ -444,6 +453,8 @@ export default defineComponent({
         viewMode: this.viewMode,
         timeframe: this.selectedTimeframe,
       });
+      if (this.viewMode === 'ai_credit' || this.viewMode === 'premium_request') params.set('sourceApi', 'ai_credit_usage');
+      else params.delete('sourceApi');
       params.delete('since');
       params.delete('until');
       const selectedTeam = this.normalizeTeamSelection(this.selectedTeam);
@@ -486,8 +497,14 @@ export default defineComponent({
     },
     formatMetric(item: BillingUsageModelDetail, key: string): string {
       const value = item[key as keyof BillingUsageModelDetail];
-      if (key.toLowerCase().includes('amount') || key.toLowerCase().includes('cost')) return this.formatCurrency(value as number | undefined);
+      const normalizedKey = key.toLowerCase();
+      if (normalizedKey.includes('amount') || normalizedKey.includes('cost') || normalizedKey.includes('usd')) return this.formatCurrency(value as number | undefined);
+      if (normalizedKey.includes('credit')) return this.formatCredits(value as number | undefined);
       return this.formatNumber(value as number | undefined);
+    },
+    formatCredits(value?: number): string {
+      if (value === undefined || value === null) return '-';
+      return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2, minimumFractionDigits: 0 }).format(value);
     },
     formatNumber(value?: number): string {
       if (value === undefined || value === null) return '-';

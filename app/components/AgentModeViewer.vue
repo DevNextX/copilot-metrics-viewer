@@ -300,16 +300,16 @@
                 </v-col>
               </v-row>
 
-              <!-- Premium requests info card -->
+              <!-- AI credits info card -->
               <v-row class="mb-2">
                 <v-col cols="12">
                   <v-alert variant="tonal" color="info" icon="mdi-information-outline" density="compact">
                     <div class="text-body-2">
-                      <strong>Premium requests</strong> — some models consume multiple Copilot request units (e.g. Claude Opus 4.7 = 7.5×, GPT-5.4 mini = 0.25×).
-                      This dashboard shows request counts; to view quota usage and estimated costs, check your
+                      <strong>AI Credits</strong> track billable Copilot model usage across plans and models.
+                      This dashboard shows activity counts; to view AI Credit usage and billed amounts, check your
                       <a :href="billingUrl" target="_blank" rel="noopener" class="text-primary">billing settings</a>
                       or the
-                      <a href="https://docs.github.com/en/copilot/concepts/billing/copilot-requests#model-multipliers" target="_blank" rel="noopener" class="text-primary">model multipliers docs</a>.
+                      <a href="https://docs.github.com/en/copilot/concepts/billing/copilot-requests" target="_blank" rel="noopener" class="text-primary">Copilot billing docs</a>.
                     </div>
                   </v-alert>
                 </v-col>

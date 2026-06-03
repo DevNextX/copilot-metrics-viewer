@@ -229,7 +229,7 @@ export async function fetchBillingUsageReport(
   headers: HeadersInit,
   filters: BillingUsageRequestFilters = {}
 ): Promise<BillingUsageReport> {
-  const viewMode = filters.viewMode ?? 'premium_request';
+  const viewMode = filters.viewMode ?? 'ai_credit';
   const period = resolveBillingUsagePeriod(options, filters.timeframe);
 
   if (options.isDataMocked) {
@@ -297,7 +297,9 @@ function buildBaseReport(
 ): Omit<BillingUsageReport, 'summary' | 'users' | 'modelOptions'> {
   const scope = options.scope ?? 'organization';
   const identifier = scope === 'enterprise' ? options.githubEnt ?? '' : options.githubOrg ?? '';
-  const billingSourceScope = scope === 'organization' && viewMode === 'premium_request' && options.githubEnt ? 'enterprise' : scope;
+  const billingSourceScope = (viewMode === 'premium_request' || viewMode === 'ai_credit') && (scope === 'enterprise' || options.githubEnt)
+    ? 'enterprise'
+    : scope;
   const teamKind = getTeamKind(options);
   const teamFilterWarning = options.githubTeam
     ? 'Team filtering uses current team membership because GitHub Billing Usage APIs do not expose historical team attribution.'
@@ -335,7 +337,7 @@ function buildMockBillingUsageReport(
   periodStart: string,
   periodEnd: string,
 ): BillingUsageReport {
-  const viewMode = filters.viewMode ?? 'premium_request';
+  const viewMode = filters.viewMode ?? 'ai_credit';
   if (viewMode === 'token_usage' && filters.sourceApi === 'billing_usage_summary') {
     const aggregate = loadMockJson<RawBillingUsageSummaryResponse>('billing-usage-token-usage-aggregate-only.json');
     return normalizeAggregateTokenSummary(options, aggregate, periodStart, periodEnd, true);
@@ -350,7 +352,7 @@ function buildMockBillingUsageReport(
     ? 'billing-usage-enterprise-premium-request.json'
     : 'billing-usage-organization-premium-request.json';
   const raw = loadMockJson<RawPremiumRequestUsageResponse>(file);
-  return normalizePremiumRequestUsage(options, raw.usage, periodStart, periodEnd, filters, true);
+  return normalizePremiumRequestUsage(options, raw.usage ?? [], periodStart, periodEnd, { ...filters, viewMode }, true);
 }
 
 function loadMockJson<T>(fileName: string): T {
@@ -365,6 +367,8 @@ async function fetchLivePremiumRequestReport(
   periodEnd: string,
 ): Promise<BillingUsageReport> {
   const billingOptions = await resolvePremiumRequestBillingOptions(options, headers);
+  const sourceApi = resolvePremiumRequestSourceApi(filters);
+  const usageViewMode = resolveCreditViewMode(filters);
 
   if (!filters.user) {
     return fetchLivePremiumRequestUsersReport(billingOptions, headers, filters, periodStart, periodEnd);
@@ -373,17 +377,17 @@ async function fetchLivePremiumRequestReport(
   const teamMembers = billingOptions.githubTeam ? await fetchAllTeamMembers(billingOptions, headers) : undefined;
   if (teamMembers) {
     if (teamMembers.length === 0) {
-      return buildEmptyTeamFilteredReport(billingOptions, 'premium_request', periodStart, periodEnd, 'premium_request_usage', 0, 'The selected team has no current members.');
+      return buildEmptyTeamFilteredReport(billingOptions, usageViewMode, periodStart, periodEnd, sourceApi, 0, 'The selected team has no current members.');
     }
 
     const requestedUser = filters.user.toLowerCase();
     const isTeamMember = normalizeTeamMemberRefs(teamMembers).some((member) => member.login?.toLowerCase() === requestedUser);
     if (!isTeamMember) {
-      return buildEmptyTeamFilteredReport(billingOptions, 'premium_request', periodStart, periodEnd, 'premium_request_usage', teamMembers.length, 'The requested user is not a current member of the selected team.');
+      return buildEmptyTeamFilteredReport(billingOptions, usageViewMode, periodStart, periodEnd, sourceApi, teamMembers.length, 'The requested user is not a current member of the selected team.');
     }
   }
 
-  const url = buildPremiumRequestUsageUrl(billingOptions);
+  const url = buildPremiumRequestUsageUrl(billingOptions, filters);
   const raw = await $fetch<RawPremiumRequestUsageResponse>(url, {
     headers: buildGitHubHeaders(headers),
     params: buildBillingUsageParams(billingOptions, filters),
@@ -489,9 +493,11 @@ async function fetchLivePremiumRequestUsersReport(
   periodEnd: string,
 ): Promise<BillingUsageReport> {
   const fetchHeaders = buildGitHubHeaders(headers);
+  const sourceApi = resolvePremiumRequestSourceApi(filters);
+  const usageViewMode = resolveCreditViewMode(filters);
   const teamMembers = options.githubTeam ? await fetchAllTeamMembers(options, headers) : undefined;
   if (teamMembers?.length === 0) {
-    return buildEmptyTeamFilteredReport(options, 'premium_request', periodStart, periodEnd, 'premium_request_usage', 0, 'The selected team has no current members.');
+    return buildEmptyTeamFilteredReport(options, usageViewMode, periodStart, periodEnd, sourceApi, 0, 'The selected team has no current members.');
   }
 
   const candidateSeatOptions = resolvePremiumRequestCandidateSeatOptions(options);
@@ -499,7 +505,7 @@ async function fetchLivePremiumRequestUsersReport(
   const users = teamMembers ? filterPremiumRequestCandidateUsers(seatUsers, teamMembers, filters.user) : seatUsers;
 
   if (teamMembers && users.length === 0) {
-    return buildEmptyTeamFilteredReport(options, 'premium_request', periodStart, periodEnd, 'premium_request_usage', teamMembers.length, 'No current members of the selected team have Copilot seats for this billing scope.');
+    return buildEmptyTeamFilteredReport(options, usageViewMode, periodStart, periodEnd, sourceApi, teamMembers.length, 'No current members of the selected team have Copilot seats for this billing scope.');
   }
 
   const usageItems: RawPremiumRequestUsageItem[] = [];
@@ -520,10 +526,10 @@ async function fetchLivePremiumRequestUsersReport(
 
   if (failedUsers.length > 0) {
     dataState = 'partial';
-    messages.push(`Premium request usage could not be loaded for ${failedUsers.length} users.`);
+    messages.push(`${sourceApi === 'ai_credit_usage' ? 'AI credit usage' : 'Premium request usage'} could not be loaded for ${failedUsers.length} users.`);
   }
 
-  const sortedUsers = sortUsers(withSeatUsers.users, 'premium_request');
+  const sortedUsers = sortUsers(withSeatUsers.users, usageViewMode);
   return {
     ...withSeatUsers,
     resolvedMemberCount: teamMembers?.length ?? withSeatUsers.resolvedMemberCount,
@@ -572,7 +578,7 @@ async function fetchPremiumRequestUsageItemsForUserUncached(
   filters: BillingUsageRequestFilters,
   user: BillingUsageSeatUser,
 ): Promise<RawPremiumRequestUsageItem[]> {
-  const raw = await $fetch<RawPremiumRequestUsageResponse>(buildPremiumRequestUsageUrl(options), {
+  const raw = await $fetch<RawPremiumRequestUsageResponse>(buildPremiumRequestUsageUrl(options, filters), {
     headers,
     params: buildBillingUsageParams(options, { ...filters, user: user.login }),
   });
@@ -598,7 +604,7 @@ function buildPremiumRequestUserCacheKey(options: Options, headers: HeadersInit,
   return [
     getAuthCacheKey(headers),
     'premium-request-user',
-    buildPremiumRequestUsageUrl(options),
+    buildPremiumRequestUsageUrl(options, filters),
     options.githubOrg ?? '',
     String(period.year),
     String(period.month ?? ''),
@@ -725,10 +731,14 @@ function addMissingSeatUsers(report: BillingUsageReport, seatUsers: BillingUsage
       login: user.login,
       userId: user.id,
       avatarUrl: user.avatarUrl,
+      aiCredits: 0,
+      includedCredits: 0,
+      additionalCredits: 0,
       premiumRequests: 0,
       includedRequests: 0,
       billedRequests: 0,
       grossAmountUsd: 0,
+      additionalUsageUsd: 0,
       billedAmountUsd: 0,
       models: [],
     }));
@@ -797,17 +807,29 @@ async function fetchLiveTokenUsageReport(
   return normalizeAggregateTokenSummary(options, summary, periodStart, periodEnd, false);
 }
 
-function buildPremiumRequestUsageUrl(options: Options): string {
+function buildPremiumRequestUsageUrl(options: Options, filters: BillingUsageRequestFilters = {}): string {
   const baseUrl = 'https://api.github.com';
+  const sourceApi = resolvePremiumRequestSourceApi(filters);
+  const usagePathSegment = sourceApi === 'ai_credit_usage' ? 'ai_credit' : 'premium_request';
   // Use enterprise endpoint when: enterprise scope, OR org-within-enterprise (githubEnt available).
   // GitHub's per-user premium request billing is only exposed at the enterprise level for GHEC orgs.
-  const useEnterprise = options.scope === 'enterprise' || (options.scope === 'organization' && Boolean(options.githubEnt));
+  const useEnterprise = options.scope === 'enterprise' || Boolean(options.githubEnt);
   if (useEnterprise) {
     if (!options.githubEnt) throw new Error('GitHub enterprise must be set for enterprise billing usage');
-    return `${baseUrl}/enterprises/${options.githubEnt}/settings/billing/premium_request/usage`;
+    return `${baseUrl}/enterprises/${options.githubEnt}/settings/billing/${usagePathSegment}/usage`;
   }
   if (!options.githubOrg) throw new Error('GitHub organization must be set for organization billing usage');
-  return `${baseUrl}/organizations/${options.githubOrg}/settings/billing/premium_request/usage`;
+  return `${baseUrl}/organizations/${options.githubOrg}/settings/billing/${usagePathSegment}/usage`;
+}
+
+function resolvePremiumRequestSourceApi(filters: BillingUsageRequestFilters): BillingUsageSourceApi {
+  if (filters.sourceApi === 'premium_request_usage') return 'premium_request_usage';
+  if (filters.viewMode === 'premium_request') return 'premium_request_usage';
+  return 'ai_credit_usage';
+}
+
+function resolveCreditViewMode(filters: BillingUsageRequestFilters): BillingUsageViewMode {
+  return resolvePremiumRequestSourceApi(filters) === 'ai_credit_usage' ? 'ai_credit' : 'premium_request';
 }
 
 function buildBillingUsageUrl(options: Options): string {
@@ -849,9 +871,9 @@ function buildBillingUsageParams(
     year: String(period.year),
   };
   if (period.month) params.month = String(period.month);
-  // Add organization filter when using an enterprise endpoint but scoping to a specific org.
-  // This covers: (a) enterprise scope with org drill-down, (b) org-within-enterprise routing.
-  if (options.githubOrg && !filters.user && (options.scope === 'enterprise' || options.githubEnt)) params.organization = options.githubOrg;
+  // Add organization filter for enhanced token billing only. AI Credit and legacy Premium Request
+  // follow billing-entity semantics, and per-user calls cannot be combined with organization.
+  if (filters.viewMode === 'token_usage' && options.githubOrg && !filters.user && (options.scope === 'enterprise' || options.githubEnt)) params.organization = options.githubOrg;
   if (filters.model) params.model = filters.model;
   if (filters.user) params.user = filters.user;
   return params;
@@ -865,7 +887,9 @@ export function normalizePremiumRequestUsage(
   filters: BillingUsageRequestFilters = {},
   isMock = false,
 ): BillingUsageReport {
-  const base = buildBaseReport(new Options({ ...options.toObject(), isDataMocked: isMock }), 'premium_request', periodStart, periodEnd, isMock ? 'mock' : 'premium_request_usage');
+  const sourceApi = isMock ? 'mock' : resolvePremiumRequestSourceApi(filters);
+  const viewMode = isMock ? filters.viewMode ?? 'ai_credit' : resolveCreditViewMode(filters);
+  const base = buildBaseReport(new Options({ ...options.toObject(), isDataMocked: isMock }), viewMode, periodStart, periodEnd, sourceApi);
   const filtered = filterByModel(rawItems, filters.model);
   const usersByKey = new Map<string, BillingUsageUser>();
   const hasUserDimension = filtered.some((item) => Boolean(normalizeRawUserRef(item.user))) || Boolean(normalizeRawUserRef(filters.user));
@@ -887,36 +911,49 @@ export function normalizePremiumRequestUsage(
       userId: userRef?.id,
       avatarUrl: userRef?.avatarUrl,
       organizationLogin: normalizeOrganizationLogin(item.organization),
+      aiCredits: 0,
+      includedCredits: 0,
+      additionalCredits: 0,
       premiumRequests: 0,
       includedRequests: 0,
       billedRequests: 0,
       grossAmountUsd: 0,
+      additionalUsageUsd: 0,
       billedAmountUsd: 0,
       models: [],
     };
 
+    user.aiCredits = (user.aiCredits ?? 0) + grossQuantity;
+    user.includedCredits = (user.includedCredits ?? 0) + discountQuantity;
+    user.additionalCredits = (user.additionalCredits ?? 0) + netQuantity;
     user.premiumRequests = (user.premiumRequests ?? 0) + grossQuantity;
     user.includedRequests = (user.includedRequests ?? 0) + discountQuantity;
     user.billedRequests = (user.billedRequests ?? 0) + netQuantity;
     user.grossAmountUsd = (user.grossAmountUsd ?? 0) + grossAmount;
+    user.additionalUsageUsd = (user.additionalUsageUsd ?? 0) + netAmount;
     user.billedAmountUsd = (user.billedAmountUsd ?? 0) + netAmount;
 
     const modelDetail = getOrCreateModelDetail(user.models, model, modelKey);
+    modelDetail.aiCredits = (modelDetail.aiCredits ?? 0) + grossQuantity;
+    modelDetail.includedCredits = (modelDetail.includedCredits ?? 0) + discountQuantity;
+    modelDetail.additionalCredits = (modelDetail.additionalCredits ?? 0) + netQuantity;
     modelDetail.premiumRequests = (modelDetail.premiumRequests ?? 0) + grossQuantity;
     modelDetail.includedRequests = (modelDetail.includedRequests ?? 0) + discountQuantity;
     modelDetail.billedRequests = (modelDetail.billedRequests ?? 0) + netQuantity;
     modelDetail.grossAmountUsd = (modelDetail.grossAmountUsd ?? 0) + grossAmount;
+    modelDetail.additionalUsageUsd = (modelDetail.additionalUsageUsd ?? 0) + netAmount;
     modelDetail.billedAmountUsd = (modelDetail.billedAmountUsd ?? 0) + netAmount;
 
     usersByKey.set(userKey, user);
   }
 
-  const users = sortUsers([...usersByKey.values()], 'premium_request');
+  const users = sortUsers([...usersByKey.values()], viewMode);
   const messages: string[] = [];
   let dataState: BillingUsageDataState = 'complete';
   if (filtered.length > 0 && !hasUserDimension) {
     dataState = 'partial';
-    messages.push('GitHub Premium Request Usage returned aggregate records without user identifiers. Query with user={login}, or enumerate users and query each user, to build user-level rows.');
+    const sourceLabel = sourceApi === 'ai_credit_usage' ? 'AI Credit Usage' : 'Premium Request Usage';
+    messages.push(`GitHub ${sourceLabel} returned aggregate records without user identifiers. Query with user={login}, or enumerate users and query each user, to build user-level rows.`);
   }
 
   return applyTeamFilterIfNeeded({
@@ -1070,15 +1107,18 @@ function getOrCreateModelDetail(models: BillingUsageModelDetail[], model: string
 function sortUsers(users: BillingUsageUser[], viewMode: BillingUsageViewMode): BillingUsageUser[] {
   const sorted = users.map((user) => ({
     ...user,
-    models: [...user.models].sort((left, right) => (right.totalTokens ?? right.premiumRequests ?? 0) - (left.totalTokens ?? left.premiumRequests ?? 0)),
+    models: [...user.models].sort((left, right) => (right.totalTokens ?? right.aiCredits ?? right.premiumRequests ?? 0) - (left.totalTokens ?? left.aiCredits ?? left.premiumRequests ?? 0)),
   }));
   if (viewMode === 'token_usage') return sorted.sort((left, right) => (right.totalTokens ?? 0) - (left.totalTokens ?? 0));
-  return sorted.sort((left, right) => (right.premiumRequests ?? 0) - (left.premiumRequests ?? 0));
+  return sorted.sort((left, right) => (right.aiCredits ?? right.premiumRequests ?? 0) - (left.aiCredits ?? left.premiumRequests ?? 0));
 }
 
 function summarizeUsers(users: BillingUsageUser[]): BillingUsageSummary {
   return users.reduce<BillingUsageSummary>((summary, user) => ({
     totalUsers: summary.totalUsers + 1,
+    totalAiCredits: (summary.totalAiCredits ?? 0) + (user.aiCredits ?? user.premiumRequests ?? 0),
+    totalIncludedCredits: (summary.totalIncludedCredits ?? 0) + (user.includedCredits ?? user.includedRequests ?? 0),
+    totalAdditionalCredits: (summary.totalAdditionalCredits ?? 0) + (user.additionalCredits ?? user.billedRequests ?? 0),
     totalPremiumRequests: (summary.totalPremiumRequests ?? 0) + (user.premiumRequests ?? 0),
     totalIncludedRequests: (summary.totalIncludedRequests ?? 0) + (user.includedRequests ?? 0),
     totalBilledRequests: (summary.totalBilledRequests ?? 0) + (user.billedRequests ?? 0),
@@ -1088,6 +1128,7 @@ function summarizeUsers(users: BillingUsageUser[]): BillingUsageSummary {
     totalCachedTokens: (summary.totalCachedTokens ?? 0) + (user.cachedTokens ?? 0),
     totalCacheWriteTokens: (summary.totalCacheWriteTokens ?? 0) + (user.cacheWriteTokens ?? 0),
     grossAmountUsd: (summary.grossAmountUsd ?? 0) + (user.grossAmountUsd ?? 0),
+    additionalUsageUsd: (summary.additionalUsageUsd ?? 0) + (user.additionalUsageUsd ?? user.billedAmountUsd ?? 0),
     billedAmountUsd: (summary.billedAmountUsd ?? 0) + (user.billedAmountUsd ?? 0),
     estimatedCostUsd: (summary.estimatedCostUsd ?? 0) + (user.estimatedCostUsd ?? 0),
   }), { totalUsers: 0 });

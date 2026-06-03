@@ -3,8 +3,8 @@ import type { BillingUsageSourceApi, BillingUsageViewMode } from '../../shared/b
 import { applyTeamMemberFilter, fetchBillingUsageReport } from '../services/github-copilot-billing-usage-api';
 import { fetchAllTeamMembers } from '../utils/team-members';
 
-const VALID_VIEW_MODES = new Set(['premium_request', 'token_usage']);
-const VALID_SOURCE_APIS = new Set(['premium_request_usage', 'billing_usage', 'billing_usage_summary', 'mock']);
+const VALID_VIEW_MODES = new Set(['ai_credit', 'premium_request', 'token_usage']);
+const VALID_SOURCE_APIS = new Set(['premium_request_usage', 'ai_credit_usage', 'billing_usage', 'billing_usage_summary', 'mock']);
 const VALID_TIMEFRAMES = new Set(['current_month', 'last_month', 'this_year', 'last_year']);
 
 export default defineEventHandler(async (event) => {
@@ -26,7 +26,7 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 401, statusMessage: 'No Authentication provided' });
     }
 
-    const viewMode = (query.viewMode as BillingUsageViewMode | undefined) ?? 'premium_request';
+    const viewMode = (query.viewMode as BillingUsageViewMode | undefined) ?? 'ai_credit';
     const report = await fetchBillingUsageReport(options, event.context.headers, {
       viewMode,
       model: query.model as string | undefined,
@@ -35,7 +35,7 @@ export default defineEventHandler(async (event) => {
       sourceApi: query.sourceApi as BillingUsageSourceApi | undefined,
     });
 
-    if (!options.isDataMocked && options.githubTeam && viewMode !== 'premium_request') {
+    if (!options.isDataMocked && options.githubTeam && viewMode === 'token_usage') {
       const members = await fetchAllTeamMembers(options, event.context.headers);
       return applyTeamMemberFilter(report, members);
     }

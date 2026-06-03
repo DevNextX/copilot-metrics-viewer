@@ -1,12 +1,12 @@
 export type BillingUsageScope = 'organization' | 'enterprise';
 
-export type BillingUsageViewMode = 'premium_request' | 'token_usage';
+export type BillingUsageViewMode = 'ai_credit' | 'premium_request' | 'token_usage';
 
 export type BillingUsageDataState = 'complete' | 'partial' | 'unavailable' | 'permission_denied';
 
 export type BillingUsageSource = 'github_billing_analytics' | 'github_billing_report' | 'mock' | 'unavailable';
 
-export type BillingUsageSourceApi = 'premium_request_usage' | 'billing_usage' | 'billing_usage_summary' | 'mock';
+export type BillingUsageSourceApi = 'premium_request_usage' | 'ai_credit_usage' | 'billing_usage' | 'billing_usage_summary' | 'mock';
 
 export type BillingUsageTimeframe = 'current_month' | 'last_month' | 'this_year' | 'last_year';
 
@@ -35,6 +35,9 @@ export interface ModelPricingSnapshot {
 
 export interface BillingUsageSummary {
   totalUsers: number;
+  totalAiCredits?: number;
+  totalIncludedCredits?: number;
+  totalAdditionalCredits?: number;
   totalPremiumRequests?: number;
   totalIncludedRequests?: number;
   totalBilledRequests?: number;
@@ -43,7 +46,12 @@ export interface BillingUsageSummary {
   totalOutputTokens?: number;
   totalCachedTokens?: number;
   totalCacheWriteTokens?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  cachedTokens?: number;
+  cacheWriteTokens?: number;
   grossAmountUsd?: number;
+  additionalUsageUsd?: number;
   billedAmountUsd?: number;
   estimatedCostUsd?: number;
 }
@@ -51,10 +59,14 @@ export interface BillingUsageSummary {
 export interface BillingUsageModelDetail {
   model: string;
   modelKey: string;
+  aiCredits?: number;
+  includedCredits?: number;
+  additionalCredits?: number;
   premiumRequests?: number;
   includedRequests?: number;
   billedRequests?: number;
   grossAmountUsd?: number;
+  additionalUsageUsd?: number;
   billedAmountUsd?: number;
   totalTokens?: number;
   inputTokens?: number;
@@ -71,10 +83,14 @@ export interface BillingUsageUser {
   avatarUrl?: string;
   organizationLogin?: string;
   teamSlugs?: string[];
+  aiCredits?: number;
+  includedCredits?: number;
+  additionalCredits?: number;
   premiumRequests?: number;
   includedRequests?: number;
   billedRequests?: number;
   grossAmountUsd?: number;
+  additionalUsageUsd?: number;
   billedAmountUsd?: number;
   totalTokens?: number;
   inputTokens?: number;

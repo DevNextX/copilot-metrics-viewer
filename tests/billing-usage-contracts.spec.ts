@@ -39,7 +39,7 @@ describe('Billing usage Phase 1 contracts', () => {
       generatedAt: '2026-04-30T00:00:00.000Z',
       source: 'mock',
       sourceApi: 'mock',
-      viewModes: ['premium_request', 'token_usage'],
+      viewModes: ['ai_credit', 'token_usage'],
       summary: {
         totalUsers: 1,
         totalPremiumRequests: 40,
@@ -66,7 +66,7 @@ describe('Billing usage Phase 1 contracts', () => {
       messages: [],
     };
 
-    expect(report.viewModes).toContain('premium_request');
+    expect(report.viewModes).toContain('ai_credit');
     expect(report.viewModes).toContain('token_usage');
     expect(report.users[0].models[0].modelKey).toBe('gpt-4-1');
   });
@@ -143,6 +143,185 @@ describe('Billing usage Phase 1 contracts', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(report.users[0].login).toBe('octocat');
     expect(report.summary.totalPremiumRequests).toBe(7);
+  });
+
+  it('builds enterprise AI credit user rows by querying the billing entity per seat user', async () => {
+    const fetchCalls: Array<{ url: string; params?: Record<string, string> }> = [];
+    const fetchMock = vi.fn(async (url: string, init?: { params?: Record<string, string> }) => {
+      fetchCalls.push({ url, params: init?.params });
+
+      if (url.includes('/copilot/billing/seats')) {
+        expect(url).toBe('https://api.github.com/enterprises/credit-ent/copilot/billing/seats');
+        return {
+          seats: [
+            { assignee: { id: 1, login: 'octocat' } },
+            { assignee: { id: 2, login: 'mona' } },
+          ],
+        };
+      }
+
+      expect(url).toBe('https://api.github.com/enterprises/credit-ent/settings/billing/ai_credit/usage');
+      expect(init?.params).toMatchObject({ year: '2026', month: '6' });
+      expect(init?.params?.organization).toBeUndefined();
+      const requestedUser = init?.params?.user;
+      return {
+        usageItems: [
+          {
+            model: 'gpt-4.1',
+            unitType: 'ai-credits',
+            grossQuantity: requestedUser === 'octocat' ? 21 : 5,
+            discountQuantity: 0,
+            netQuantity: requestedUser === 'octocat' ? 21 : 5,
+            grossAmount: 0,
+            netAmount: 0,
+          },
+        ],
+      };
+    });
+    vi.stubGlobal('$fetch', fetchMock);
+
+    const report = await fetchBillingUsageReport(
+      new Options({ scope: 'enterprise', githubEnt: 'credit-ent', since: '2026-06-01', until: '2026-06-30' }),
+      new Headers({ Authorization: 'Bearer credit-token' }),
+      { viewMode: 'ai_credit', sourceApi: 'ai_credit_usage' },
+    );
+
+    expect(fetchCalls.map((call) => call.url)).toContain('https://api.github.com/enterprises/credit-ent/settings/billing/ai_credit/usage');
+    expect(fetchCalls.map((call) => call.url)).toContain('https://api.github.com/enterprises/credit-ent/copilot/billing/seats');
+    expect(fetchCalls.map((call) => call.url)).not.toContain('https://api.github.com/enterprises/credit-ent/settings/billing/premium_request/usage');
+    expect(report.sourceApi).toBe('ai_credit_usage');
+    expect(report.viewModes).toEqual(['ai_credit']);
+    expect(report.dataState).toBe('complete');
+    expect(report.users.map((user) => user.login)).toEqual(['octocat', 'mona']);
+    expect(report.summary.totalAiCredits).toBe(26);
+    expect(report.summary.totalAdditionalCredits).toBe(26);
+    expect(report.summary.totalPremiumRequests).toBe(26);
+  });
+
+  it('uses enterprise billing entity for organization AI credit reports when a parent enterprise is discovered', async () => {
+    const fetchMock = vi.fn(async (url: string, init?: { params?: Record<string, string> }) => {
+      if (url === 'https://api.github.com/orgs/enterprise-owned-org') {
+        return { login: 'enterprise-owned-org', enterprise: { slug: 'billing-ent' } };
+      }
+
+      if (url.includes('/copilot/billing/seats')) {
+        expect(url).toBe('https://api.github.com/orgs/enterprise-owned-org/copilot/billing/seats');
+        return { seats: [{ assignee: { id: 3, login: 'enterprise-org-user' } }] };
+      }
+
+      expect(url).toBe('https://api.github.com/enterprises/billing-ent/settings/billing/ai_credit/usage');
+      expect(init?.params).toMatchObject({ user: 'enterprise-org-user', year: '2026', month: '6' });
+      expect(init?.params?.organization).toBeUndefined();
+      return {
+        usageItems: [
+          {
+            model: 'gpt-4.1',
+            unitType: 'ai-credits',
+            grossQuantity: 34,
+            discountQuantity: 10,
+            netQuantity: 24,
+            grossAmount: 3.4,
+            netAmount: 2.4,
+          },
+        ],
+      };
+    });
+    vi.stubGlobal('$fetch', fetchMock);
+
+    const report = await fetchBillingUsageReport(
+      new Options({ scope: 'organization', githubOrg: 'enterprise-owned-org', since: '2026-06-01', until: '2026-06-30' }),
+      new Headers({ Authorization: 'Bearer credit-token' }),
+      { viewMode: 'ai_credit', sourceApi: 'ai_credit_usage' },
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(report.billingSourceScope).toBe('enterprise');
+    expect(report.billingEnterpriseSlug).toBe('billing-ent');
+    expect(report.users[0].login).toBe('enterprise-org-user');
+    expect(report.summary.totalAiCredits).toBe(34);
+    expect(report.summary.totalIncludedCredits).toBe(10);
+    expect(report.summary.totalAdditionalCredits).toBe(24);
+  });
+
+  it('keeps standalone organization AI credit reports on organization billing entity', async () => {
+    const fetchMock = vi.fn(async (url: string, init?: { params?: Record<string, string>; body?: { variables?: { org?: string } } }) => {
+      if (url === 'https://api.github.com/orgs/standalone-credit-org') {
+        return { login: 'standalone-credit-org', enterprise: null };
+      }
+
+      if (url === 'https://api.github.com/graphql') {
+        expect(init?.body?.variables?.org).toBe('standalone-credit-org');
+        return { data: { viewer: { enterprises: { nodes: [] } } } };
+      }
+
+      if (url.includes('/copilot/billing/seats')) {
+        expect(url).toBe('https://api.github.com/orgs/standalone-credit-org/copilot/billing/seats');
+        return { seats: [{ assignee: { id: 4, login: 'standalone-user' } }] };
+      }
+
+      expect(url).toBe('https://api.github.com/organizations/standalone-credit-org/settings/billing/ai_credit/usage');
+      expect(init?.params).toMatchObject({ user: 'standalone-user', year: '2026', month: '6' });
+      expect(init?.params?.organization).toBeUndefined();
+      return {
+        usageItems: [
+          {
+            model: 'gpt-4.1',
+            unitType: 'ai-credits',
+            grossQuantity: 8,
+            discountQuantity: 8,
+            netQuantity: 0,
+            grossAmount: 0.8,
+            netAmount: 0,
+          },
+        ],
+      };
+    });
+    vi.stubGlobal('$fetch', fetchMock);
+
+    const report = await fetchBillingUsageReport(
+      new Options({ scope: 'organization', githubOrg: 'standalone-credit-org', since: '2026-06-01', until: '2026-06-30' }),
+      new Headers({ Authorization: 'Bearer credit-token' }),
+      { viewMode: 'ai_credit', sourceApi: 'ai_credit_usage' },
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(report.billingSourceScope).toBe('organization');
+    expect(report.billingEnterpriseSlug).toBeUndefined();
+    expect(report.users[0].login).toBe('standalone-user');
+    expect(report.summary.totalAiCredits).toBe(8);
+  });
+
+  it('queries personal AI credit usage at the billing entity without combining organization', async () => {
+    const fetchMock = vi.fn(async (url: string, init?: { params?: Record<string, string> }) => {
+      expect(url).toBe('https://api.github.com/enterprises/billing-ent/settings/billing/ai_credit/usage');
+      expect(init?.params).toMatchObject({ user: 'octocat', year: '2026', month: '6' });
+      expect(init?.params?.organization).toBeUndefined();
+      return {
+        usageItems: [
+          {
+            model: 'gpt-4.1',
+            unitType: 'ai-credits',
+            grossQuantity: 5,
+            discountQuantity: 1,
+            netQuantity: 4,
+            grossAmount: 0.5,
+            netAmount: 0.4,
+          },
+        ],
+      };
+    });
+    vi.stubGlobal('$fetch', fetchMock);
+
+    const report = await fetchBillingUsageReport(
+      new Options({ scope: 'enterprise', githubEnt: 'billing-ent', githubOrg: 'enterprise-owned-org', since: '2026-06-01', until: '2026-06-30' }),
+      new Headers({ Authorization: 'Bearer credit-token' }),
+      { viewMode: 'ai_credit', sourceApi: 'ai_credit_usage', user: 'octocat' },
+    );
+
+    expect(report.billingSourceScope).toBe('enterprise');
+    expect(report.users[0].login).toBe('octocat');
+    expect(report.summary.totalAiCredits).toBe(5);
+    expect(report.summary.totalAdditionalCredits).toBe(4);
   });
 
   it('uses organization seats for enterprise scope with an organization override while keeping enterprise billing', async () => {
